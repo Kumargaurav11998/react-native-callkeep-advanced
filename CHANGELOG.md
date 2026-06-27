@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.4] - 2026-06-27
+## [0.0.5] - 2026-06-27
 
 ### Added
 - **SEO Optimization**: Added relevant keywords to `package.json` to improve discoverability on NPM and Google.

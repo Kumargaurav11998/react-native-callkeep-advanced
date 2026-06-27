@@ -1,6 +1,6 @@
 {
   "name": "react-native-callkeep-advanced",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "iOS CallKit framework and Android ConnectionService for React Native",
   "keywords": [
     "react-native",
@@ -19,7 +19,7 @@
   "scripts": {},
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/react-native-webrtc/react-native-callkeep.git"
+    "url": "git+https://github.com/Kumargaurav11998/react-native-callkeep-advanced.git"
   },
   "author": "See AUTHORS file",
   "maintainers": [
@@ -30,9 +30,9 @@
   ],
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/react-native-webrtc/react-native-callkeep/issues"
+    "url": "https://github.com/Kumargaurav11998/react-native-callkeep-advanced/issues"
   },
-  "homepage": "https://github.com/react-native-webrtc/react-native-callkeep#readme",
+  "homepage": "https://github.com/Kumargaurav11998/react-native-callkeep-advanced#readme",
   "typings": "./index.d.ts",
   "peerDependencies": {
     "react-native": ">=0.40.0"
