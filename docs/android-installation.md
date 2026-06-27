@@ -72,20 +72,6 @@ public class MainActivity extends ReactActivity {
 
 <application>
     // ...
-    <service android:name="io.wazo.callkeep.VoiceConnectionService"
-        android:label="Wazo"
-        android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
-        // Use this to target android >= 11
-        android:foregroundServiceType="camera|microphone"
-        // For android < 11
-        android:foregroundServiceType="phoneCall"
-        android:exported="true"
-    >
-        
-        <intent-filter>
-            <action android:name="android.telecom.ConnectionService" />
-        </intent-filter>
-    </service>
     // ....
 </application>
 ```

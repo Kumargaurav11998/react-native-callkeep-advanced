@@ -87,6 +87,24 @@ const options = {
 RNCallKeep.setup(options).then(accepted => {});
 ```
 
+For Android, you must also add the `VoiceConnectionService` to your `AndroidManifest.xml` inside the `<application>` tag:
+
+```xml
+    <service android:name="io.wazo.callkeep.VoiceConnectionService"
+        android:label="Wazo"
+        android:permission="android.permission.BIND_TELECOM_CONNECTION_SERVICE"
+        // Use this to target android >= 11
+        android:foregroundServiceType="camera|microphone"
+        // For android < 11
+        android:foregroundServiceType="phoneCall"
+        android:exported="true"
+    >
+        <intent-filter>
+            <action android:name="android.telecom.ConnectionService" />
+        </intent-filter>
+    </service>
+```
+
 iOS only.
 
 Alternative on iOS you can perform setup in `AppDelegate.m`. Doing this allows capturing events prior to the react native event bridge being up. Please be aware that calling setup in `AppDelegate.m` will ignore any subsequent calls to `RNCallKeep.setup();`.
