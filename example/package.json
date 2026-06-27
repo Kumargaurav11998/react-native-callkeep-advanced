@@ -14,7 +14,7 @@
     "react": "19.2.3",
     "react-native": "0.86.0",
     "react-native-background-timer": "^2.4.1",
-    "react-native-callkeep-advanced": "file:../react-native-callkeep-advanced-4.3.39.tgz",
+    "react-native-callkeep-advanced": "^0.0.4",
     "react-native-device-info": "^15.0.2",
     "react-native-safe-area-context": "^5.5.2",
     "uuid": "^14.0.1"
