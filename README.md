@@ -40,7 +40,8 @@ A complete working example of `react-native-callkeep-advanced` is available in t
 #### Android (Self Managed Mode)
 When `selfManaged` is set to `true`, the library provides a custom incoming call UI instead of the default dialer. It displays a full-screen view (when device is locked) or a heads-up notification (when device is unlocked).
 
-<img src="docs/pictures/android-self-managed-fullscreen.png" width="250" /> <img src="docs/pictures/android-self-managed-headsup.png" width="250" />
+
+<img src="docs/pictures/android-self-managed-fullscreen.jpg" /> <img src="docs/pictures/android-self-managed-headsup.png.jpg" />
 
 #### iOS
 ![Connection Service](docs/pictures/call-kit.png)
