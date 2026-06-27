@@ -39,6 +39,8 @@ public class IncomingCallActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true);
             setTurnScreenOn(true);
@@ -49,8 +51,23 @@ public class IncomingCallActivity extends Activity {
         } else {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED |
                     WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD |
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON |
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+        }
+
+        // WakeLock to activate screen and wake CPU
+        try {
+            android.os.PowerManager pm = (android.os.PowerManager) getApplicationContext().getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                android.os.PowerManager.WakeLock wakeLock = pm.newWakeLock(
+                    android.os.PowerManager.SCREEN_BRIGHT_WAKE_LOCK | 
+                    android.os.PowerManager.FULL_WAKE_LOCK | 
+                    android.os.PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                    "CallKeep:PowerManager"
+                );
+                wakeLock.acquire(15000); // 15 seconds
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "[IncomingCallActivity] Failed to acquire WakeLock", e);
         }
 
         callUUID = getIntent().getStringExtra(EXTRA_CALL_UUID);

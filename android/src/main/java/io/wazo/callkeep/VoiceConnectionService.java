@@ -19,7 +19,6 @@ package io.wazo.callkeep;
 
 import static io.wazo.callkeep.Constants.ACTION_ANSWER_CALL;
 import static io.wazo.callkeep.Constants.ACTION_END_CALL;
-import static io.wazo.callkeep.Constants.ACTION_DISMISS_INCOMING_NOTIFICATION;
 
 import android.annotation.TargetApi;
 import android.app.ActivityManager;
@@ -171,36 +170,6 @@ public class VoiceConnectionService extends ConnectionService {
                                 deinitConnection(uuid);
                             }
                         } catch (Exception e) {}
-                    }
-                }
-            }
-
-            if (ACTION_DISMISS_INCOMING_NOTIFICATION.equals(action)) {
-                Log.d(TAG, "[VoiceConnectionService] Dismiss incoming notification received, checking call state");
-                String uuid = null;
-                String callerNumber = null;
-                String callerName = null;
-                Bundle payload = null;
-                if (intent.getExtras() != null) {
-                    if (intent.getExtras().containsKey("attributeMap")) {
-                        HashMap<String, String> map = (HashMap<String, String>) intent.getExtras().getSerializable("attributeMap");
-                        if (map != null) {
-                            uuid = map.get(EXTRA_CALL_UUID);
-                            callerNumber = map.get(EXTRA_CALL_NUMBER);
-                            callerName = map.get(EXTRA_CALLER_NAME);
-                        }
-                    }
-                    payload = intent.getExtras().getBundle(EXTRA_PAYLOAD);
-                }
-                if (uuid != null) {
-                    try {
-                        android.telecom.Connection conn = getConnection(uuid);
-                        if (conn != null && conn.getState() == Connection.STATE_RINGING) {
-                            Log.d(TAG, "[VoiceConnectionService] Call is still ringing, recreating notification to prevent dismiss");
-                            startForegroundService(true, callerName, callerNumber, uuid, payload);
-                        }
-                    } catch (Exception e) {
-                        Log.e(TAG, "[VoiceConnectionService] Failed to recreate dismissed notification", e);
                     }
                 }
             }
@@ -467,14 +436,18 @@ public class VoiceConnectionService extends ConnectionService {
         int importance = (isSelfManaged && isIncomingCall) ? NotificationManager.IMPORTANCE_HIGH : NotificationManager.IMPORTANCE_NONE;
         
         NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, importance);
-        chan.setLockscreenVisibility((isSelfManaged && isIncomingCall) ? Notification.VISIBILITY_PUBLIC : Notification.VISIBILITY_PRIVATE);
-        
         if (isSelfManaged && isIncomingCall) {
+            chan.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            chan.enableLights(true);
+            chan.enableVibration(true);
+            chan.setVibrationPattern(new long[]{0, 1000, 500, 1000, 500});
             Uri ringtoneUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE);
             chan.setSound(ringtoneUri, new android.media.AudioAttributes.Builder()
                     .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
                     .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
                     .build());
+        } else {
+            chan.setLockscreenVisibility(Notification.VISIBILITY_PRIVATE);
         }
 
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -482,7 +455,10 @@ public class VoiceConnectionService extends ConnectionService {
         manager.createNotificationChannel(chan);
 
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
-        notificationBuilder.setOngoing(true);
+        notificationBuilder.setOngoing(isSelfManaged);
+        notificationBuilder.setAutoCancel(false);
+        notificationBuilder.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+        notificationBuilder.setDefaults(NotificationCompat.DEFAULT_VIBRATE);
 
         android.widget.RemoteViews customView = null;
         android.widget.RemoteViews customSmallView = null;
@@ -540,7 +516,7 @@ public class VoiceConnectionService extends ConnectionService {
             if (payload != null) {
                 fullScreenIntent.putExtra(EXTRA_PAYLOAD, payload);
             }
-            fullScreenIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            fullScreenIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             
             PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, fullScreenIntent, flag);
             
@@ -577,20 +553,7 @@ public class VoiceConnectionService extends ConnectionService {
             declineIntent.putExtras(declineExtras);
             PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
             
-            Intent dismissIntent = new Intent(this, VoiceConnectionService.class);
-            dismissIntent.setAction(ACTION_DISMISS_INCOMING_NOTIFICATION);
-            Bundle dismissExtras = new Bundle();
-            HashMap<String, String> dismissMap = new HashMap<>();
-            dismissMap.put(EXTRA_CALL_UUID, callUUID);
-            dismissMap.put(EXTRA_CALL_NUMBER, callerNumber);
-            dismissMap.put(EXTRA_CALLER_NAME, resolvedContactName);
-            dismissExtras.putSerializable("attributeMap", dismissMap);
-            if (payload != null) {
-                dismissExtras.putBundle(EXTRA_PAYLOAD, payload);
-            }
-            dismissIntent.putExtras(dismissExtras);
-            PendingIntent dismissPendingIntent = PendingIntent.getService(this, 3, dismissIntent, flag);
-            notificationBuilder.setDeleteIntent(dismissPendingIntent);
+            notificationBuilder.setDeleteIntent(declinePendingIntent);
 
             if (customView != null) {
                 String packageName = getPackageName();
@@ -621,7 +584,6 @@ public class VoiceConnectionService extends ConnectionService {
                                 finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
                                 
                                 Notification updatedNotification = finalBuilder.build();
-                                updatedNotification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR | Notification.FLAG_INSISTENT;
                                 notificationManager.notify(NOTIFICATION_ID, updatedNotification);
                             }
                         } catch (Exception e) {
@@ -658,7 +620,6 @@ public class VoiceConnectionService extends ConnectionService {
         Log.d(TAG, "[VoiceConnectionService] Starting foreground service");
 
         Notification notification = notificationBuilder.build();
-        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         if (isSelfManaged && isIncomingCall) {
             notification.flags |= Notification.FLAG_INSISTENT;
         }
@@ -669,9 +630,14 @@ public class VoiceConnectionService extends ConnectionService {
             } else {
                 startForeground(NOTIFICATION_ID, notification);
             }
-
+            if (isSelfManaged && isIncomingCall) {
+                manager.notify(NOTIFICATION_ID, notification);
+            }
         } catch (Exception e) {
             Log.w(TAG, "[VoiceConnectionService] Can't start foreground service : " + e.toString());
+            if (isSelfManaged && isIncomingCall && manager != null) {
+                manager.notify(NOTIFICATION_ID, notification);
+            }
         }
     }
 
@@ -690,6 +656,7 @@ public class VoiceConnectionService extends ConnectionService {
 
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
         notificationBuilder.setOngoing(true);
+        notificationBuilder.setAutoCancel(false);
 
         Bundle extras = conn.getExtras();
         String callerName = extras != null ? extras.getString(EXTRA_CALLER_NAME) : foregroundSettings.getString("notificationTitle");
@@ -709,7 +676,6 @@ public class VoiceConnectionService extends ConnectionService {
         declineExtras.putSerializable("attributeMap", declineMap);
         declineIntent.putExtras(declineExtras);
         PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
-        notificationBuilder.setDeleteIntent(declinePendingIntent);
 
         if (layoutId != 0 && smallLayoutId != 0) {
             android.widget.RemoteViews customView = new android.widget.RemoteViews(packageName, layoutId);
@@ -753,7 +719,6 @@ public class VoiceConnectionService extends ConnectionService {
                             finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
                             
                             Notification updatedNotification = finalBuilder.build();
-                            updatedNotification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
                             notificationManager.notify(NOTIFICATION_ID, updatedNotification);
                         }
                     } catch (Exception e) {
@@ -771,7 +736,7 @@ public class VoiceConnectionService extends ConnectionService {
                 .addAction(0, "End Call", declinePendingIntent);
         }
 
-        notificationBuilder.setPriority(NotificationCompat.PRIORITY_LOW)
+        notificationBuilder.setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_SERVICE);
 
         if (foregroundSettings.hasKey("notificationIcon")) {
@@ -792,7 +757,6 @@ public class VoiceConnectionService extends ConnectionService {
         }
 
         Notification notification = notificationBuilder.build();
-        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {

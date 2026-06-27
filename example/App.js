@@ -214,10 +214,10 @@ export default function App() {
       const number = String(Math.floor(Math.random() * 100000));
       log(`Triggering incoming call... ${number}`);
       
-      RNCallKeep.displayIncomingCall(callUUID, number, "Alice (Doctor)", 'number', false, {
+      RNCallKeep.displayIncomingCall(callUUID, number, "Kumar Gaurav", 'number', true, {
         android: {
           backgroundColor: '#2563EB',
-          avatarUrl: 'https://i.pravatar.cc/300',
+         // avatarUrl: 'https://i.pravatar.cc/300',
           payload: {
             roomId: `room_${number}`,
             name :"Gaurav",
