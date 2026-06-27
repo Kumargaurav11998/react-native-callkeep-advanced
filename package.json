@@ -1,7 +1,20 @@
 {
   "name": "react-native-callkeep-advanced",
-  "version": "0.0.5",
+  "version": "0.0.4",
   "description": "iOS CallKit framework and Android ConnectionService for React Native",
+  "keywords": [
+    "react-native",
+    "callkit",
+    "connection-service",
+    "voip",
+    "calling",
+    "webrtc",
+    "telecom",
+    "react-native-callkeep",
+    "callkeep",
+    "incoming-call",
+    "react-native-callkeep-advanced"
+  ],
   "main": "index.js",
   "scripts": {},
   "repository": {

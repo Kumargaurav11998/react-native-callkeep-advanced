@@ -1,5 +1,9 @@
 example/
-node_modules/
-.idea/
-.github/
+call/
 docs/
+.git/
+.github/
+.idea/
+.vscode/
+node_modules/
+*.tgz

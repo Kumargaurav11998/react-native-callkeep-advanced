@@ -217,7 +217,7 @@ export default function App() {
       RNCallKeep.displayIncomingCall(callUUID, number, "Kumar Gaurav", 'number', true, {
         android: {
           backgroundColor: '#2563EB',
-         // avatarUrl: 'https://i.pravatar.cc/300',
+           avatarUrl: 'https://i.pravatar.cc/300',
           payload: {
             roomId: `room_${number}`,
             name :"Gaurav",
