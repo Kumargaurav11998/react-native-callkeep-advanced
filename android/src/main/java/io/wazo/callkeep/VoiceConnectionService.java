@@ -545,6 +545,7 @@ public class VoiceConnectionService extends ConnectionService {
             declineExtras.putSerializable("attributeMap", declineMap);
             declineIntent.putExtras(declineExtras);
             PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
+            notificationBuilder.setDeleteIntent(declinePendingIntent);
 
             if (customView != null) {
                 String packageName = getPackageName();
@@ -575,6 +576,7 @@ public class VoiceConnectionService extends ConnectionService {
                                 finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
                                 
                                 Notification updatedNotification = finalBuilder.build();
+                                updatedNotification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR | Notification.FLAG_INSISTENT;
                                 notificationManager.notify(NOTIFICATION_ID, updatedNotification);
                             }
                         } catch (Exception e) {
@@ -611,16 +613,18 @@ public class VoiceConnectionService extends ConnectionService {
         Log.d(TAG, "[VoiceConnectionService] Starting foreground service");
 
         Notification notification = notificationBuilder.build();
+        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         if (isSelfManaged && isIncomingCall) {
             notification.flags |= Notification.FLAG_INSISTENT;
         }
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
             } else {
                 startForeground(NOTIFICATION_ID, notification);
             }
+
         } catch (Exception e) {
             Log.w(TAG, "[VoiceConnectionService] Can't start foreground service : " + e.toString());
         }
@@ -660,6 +664,7 @@ public class VoiceConnectionService extends ConnectionService {
         declineExtras.putSerializable("attributeMap", declineMap);
         declineIntent.putExtras(declineExtras);
         PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
+        notificationBuilder.setDeleteIntent(declinePendingIntent);
 
         if (layoutId != 0 && smallLayoutId != 0) {
             android.widget.RemoteViews customView = new android.widget.RemoteViews(packageName, layoutId);
@@ -703,6 +708,7 @@ public class VoiceConnectionService extends ConnectionService {
                             finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
                             
                             Notification updatedNotification = finalBuilder.build();
+                            updatedNotification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
                             notificationManager.notify(NOTIFICATION_ID, updatedNotification);
                         }
                     } catch (Exception e) {
@@ -741,6 +747,7 @@ public class VoiceConnectionService extends ConnectionService {
         }
 
         Notification notification = notificationBuilder.build();
+        notification.flags |= Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
