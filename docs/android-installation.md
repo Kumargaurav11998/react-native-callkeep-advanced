@@ -79,6 +79,7 @@ public class MainActivity extends ReactActivity {
         android:foregroundServiceType="camera|microphone"
         // For android < 11
         android:foregroundServiceType="phoneCall"
+        android:exported="true"
     >
         
         <intent-filter>
