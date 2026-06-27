@@ -154,6 +154,7 @@ Alternative on iOS you can perform setup in `AppDelegate.m`. Doing this allows c
     - `selfManaged`: boolean (optional)
       When set to true, call keep will configure itself to run as a self managed connection service. 
       **New feature**: When `selfManaged` is set to `true`, this library will automatically provide a full-featured incoming call UI inspired by the popular `flutter_callkit_incoming` package. It will show a modern, full-screen incoming call view (when the phone is unlocked) or a persistent high-priority heads-up notification (when locked or in another app). It also seamlessly transitions to an "Ongoing Call" state after accepting the call.
+      If `selfManaged` is `false`, the system uses the default Android Telecom UI (the native stock phone dialer). The native Telecom UI does not support customizations like `backgroundColor` or `avatarUrl`.
       - `displayCallReachabilityTimeout`: number in ms (optional)
         If provided, starts a timeout that checks if the application is reachable and ends the call if not (Default: null)
         You'll have to call `setReachable()` as soon as your Javascript application is started.
@@ -390,10 +391,10 @@ RNCallKeep.displayIncomingCall(uid, handle, localizedCallerName = '', handleType
     - `supportsDTMF`: boolean (optional, default true)
     - `supportsGrouping`: boolean (optional, default true)
     - `supportsUngrouping`: boolean (optional, default true)
-  - `android`: object
-    - `payload`: object (optional)
-      - `avatarUrl`: string (remote URL to display as caller's avatar)
-      - `backgroundColor`: string (hex color string like `#1E88E5` for the incoming call screen background)
+  - `android`: object (optional)
+    - `backgroundColor`: string (optional, hex color string like `#1E88E5` for the incoming call UI)
+    - `avatarUrl`: string (optional, remote URL to display as caller's avatar)
+    - `payload`: object (optional, any custom data to pass along with the call)
 
 ### answerIncomingCall
 
@@ -746,6 +747,7 @@ RNCallKeep.registerAndroidEvents();
 | [didReceiveStartCallAction](#didReceiveStartCallAction)         |  ✅  |   ✅    |
 | [answerCall](#answerCall)                                       |  ✅  |   ✅    |
 | [endCall](#endCall)                                             |  ✅  |   ✅    |
+| [didCallTimeout](#didCallTimeout)                               |  ❌  |   ✅    |
 | [didActivateAudioSession](#didActivateAudioSession)             |  ✅  |   ✅    |
 | [didDisplayIncomingCall](#didDisplayIncomingCall)               |  ✅  |   ✅    |
 | [didPerformSetMutedCallAction](#didPerformSetMutedCallAction)   |  ✅  |   ✅    |
@@ -805,6 +807,20 @@ RNCallKeep.addEventListener('endCall', ({ callUUID }) => {
 
 - `callUUID` (string)
   - The UUID of the call that is to be ended.
+
+### didCallTimeout
+
+*(Android only)* A call timed out after 45 seconds of ringing without being answered or declined.
+When this event fires, `endCall` will NOT be fired.
+
+```js
+RNCallKeep.addEventListener('didCallTimeout', ({ callUUID }) => {
+  // Handle the missed call
+});
+```
+
+- `callUUID` (string)
+  - The UUID of the call that timed out.
 
 ### didActivateAudioSession
 
