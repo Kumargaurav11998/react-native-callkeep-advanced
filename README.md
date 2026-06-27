@@ -39,9 +39,9 @@ A demo of `react-native-callkeep` is available in the [wazo-react-native-demo](h
 
 # Installation
 ```sh
-npm install --save react-native-callkeep
+npm install --save react-native-callkeep-advanced
 # or
-yarn add react-native-callkeep
+yarn add react-native-callkeep-advanced
 ```
 
 - [iOS](docs/ios-installation.md)
@@ -52,7 +52,7 @@ yarn add react-native-callkeep
 #### Setup
 
 ```js
-import RNCallKeep from 'react-native-callkeep';
+import RNCallKeep from 'react-native-callkeep-advanced';
 
 const options = {
   ios: {
@@ -195,7 +195,8 @@ Android supports calling apps running in what's called "Self Managed". This mean
 
 To implement a self managed calling app, the following steps are necessary:
 - Set `selfManaged: true` in setup.
-- On an incoming call, from react native, call `RNCallKeep.displayIncomingCall(uuid, handle, name, 'number', false, { payload: { avatarUrl: '...', backgroundColor: '#1E88E5' } })`
+- On an incoming call, from react native, call `RNCallKeep.displayIncomingCall(uuid, handle, name, 'number', false, { android: { avatarUrl: '...', backgroundColor: '#1E88E5', payload: { customData: '...' } } })`
+- *Note: `uuid` must be a valid UUID v4 format string!*
 - CallKeep will automatically show the custom full-screen incoming call UI or Heads-Up notification for you.
 - If the user answers the call, the UI will automatically transform to an "Ongoing call" notification and fire `answerCall` event.
 - If the user declines, the notification is dismissed and the `endCall` event is fired.
@@ -206,9 +207,16 @@ Self Managed calling apps are an advanced topic, but here are some things to kee
 - Android will deprioritize your high priority FCM notifications if you fail to show an incoming call ui when receiving them.
 - You can avoid getting flooded with sticky foreground service notifications by not defining a Foreground Service for CallKeep, and instead managing this on your own.
 
-⚠️ To be able to use the self managed mode, you'll have to add the `READ_CALL_LOG` permission in your `android/src/main/AndroidManifest.xml` file:
-```
+⚠️ To be able to use the self managed mode, you'll have to add the following permissions in your `android/src/main/AndroidManifest.xml` file:
+```xml
 <uses-permission android:name="android.permission.READ_CALL_LOG" />
+<uses-permission android:name="android.permission.BIND_TELECOM_CONNECTION_SERVICE"/>
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+<uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
 ```
 
 # API
