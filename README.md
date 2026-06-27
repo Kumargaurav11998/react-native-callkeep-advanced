@@ -152,7 +152,8 @@ Alternative on iOS you can perform setup in `AppDelegate.m`. Doing this allows c
       Any additional permissions you'd like your app to have at first launch. Can be used to simplify permission flows and avoid
       multiple popups to the user at different times.
     - `selfManaged`: boolean (optional)
-      When set to true, call keep will configure itself to run as a self managed connection service. This is an advanced topic, and it's best to refer to [Googles Documentation](https://developer.android.com/guide/topics/connectivity/telecom/selfManaged) on the matter.
+      When set to true, call keep will configure itself to run as a self managed connection service. 
+      **New feature**: When `selfManaged` is set to `true`, this library will automatically provide a full-featured incoming call UI inspired by the popular `flutter_callkit_incoming` package. It will show a modern, full-screen incoming call view (when the phone is unlocked) or a persistent high-priority heads-up notification (when locked or in another app). It also seamlessly transitions to an "Ongoing Call" state after accepting the call.
       - `displayCallReachabilityTimeout`: number in ms (optional)
         If provided, starts a timeout that checks if the application is reachable and ends the call if not (Default: null)
         You'll have to call `setReachable()` as soon as your Javascript application is started.
@@ -193,13 +194,13 @@ Android supports calling apps running in what's called "Self Managed". This mean
 
 To implement a self managed calling app, the following steps are necessary:
 - Set `selfManaged: true` in setup.
-- On an incoming call, from react native, call `RNCallKeep.displayIncomingCall`
-- CallKeep will then fire the `showIncomingCallUi` event.
-- When `showIncomingCallUi` is fired, you must show an incoming call UI. This would be a high priority notification ([Android: Display time-sensitive notifications](https://developer.android.com/training/notify-user/time-sensitive)).
-- If the user answers the call, you call the appropriate RNCallKeep actions such as `answerCall` or `endCall`
-- In certain cases Android will not allow you to show an incoming call notification. In that case the 'createIncomingConnectionFailed' event is fired and you should reject the incoming SIP Invite.
+- On an incoming call, from react native, call `RNCallKeep.displayIncomingCall(uuid, handle, name, 'number', false, { payload: { avatarUrl: '...', backgroundColor: '#1E88E5' } })`
+- CallKeep will automatically show the custom full-screen incoming call UI or Heads-Up notification for you.
+- If the user answers the call, the UI will automatically transform to an "Ongoing call" notification and fire `answerCall` event.
+- If the user declines, the notification is dismissed and the `endCall` event is fired.
+- You do NOT need to manually launch intents to display the custom UI, it is fully managed out of the box.
 
-Self Managed calling apps are an advanced topic, and there are many steps involved in implementing them, but here are some things to keep in mind:
+Self Managed calling apps are an advanced topic, but here are some things to keep in mind:
 - React Native Headless Tasks are a great way to execute React Native code. Remember to start up the headless task as a Foreground Service.
 - Android will deprioritize your high priority FCM notifications if you fail to show an incoming call ui when receiving them.
 - You can avoid getting flooded with sticky foreground service notifications by not defining a Foreground Service for CallKeep, and instead managing this on your own.
@@ -389,7 +390,10 @@ RNCallKeep.displayIncomingCall(uid, handle, localizedCallerName = '', handleType
     - `supportsDTMF`: boolean (optional, default true)
     - `supportsGrouping`: boolean (optional, default true)
     - `supportsUngrouping`: boolean (optional, default true)
-  - `android`: object (currently no-op)
+  - `android`: object
+    - `payload`: object (optional)
+      - `avatarUrl`: string (remote URL to display as caller's avatar)
+      - `backgroundColor`: string (hex color string like `#1E88E5` for the incoming call screen background)
 
 ### answerIncomingCall
 

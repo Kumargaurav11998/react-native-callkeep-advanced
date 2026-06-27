@@ -17,6 +17,9 @@
 
 package io.wazo.callkeep;
 
+import static io.wazo.callkeep.Constants.ACTION_ANSWER_CALL;
+import static io.wazo.callkeep.Constants.ACTION_END_CALL;
+
 import android.annotation.TargetApi;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningTaskInfo;
@@ -77,6 +80,7 @@ import static io.wazo.callkeep.Constants.EXTRA_CALL_UUID;
 import static io.wazo.callkeep.Constants.EXTRA_DISABLE_ADD_CALL;
 import static io.wazo.callkeep.Constants.FOREGROUND_SERVICE_TYPE_MICROPHONE;
 import static io.wazo.callkeep.Constants.ACTION_ON_CREATE_CONNECTION_FAILED;
+import static io.wazo.callkeep.Constants.EXTRA_PAYLOAD;
 
 // @see https://github.com/kbagchiGWC/voice-quickstart-android/blob/9a2aff7fbe0d0a5ae9457b48e9ad408740dfb968/exampleConnectionService/src/main/java/com/twilio/voice/examples/connectionservice/VoiceConnectionService.java
 @TargetApi(Build.VERSION_CODES.M)
@@ -110,6 +114,67 @@ public class VoiceConnectionService extends ConnectionService {
         Log.d(TAG, "[VoiceConnectionService] Constructor");
         currentConnectionRequest = null;
         currentConnectionService = this;
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.d(TAG, "[VoiceConnectionService] onStartCommand called. intent: " + intent);
+        if (intent != null && intent.getAction() != null) {
+            String action = intent.getAction();
+            Log.d(TAG, "[VoiceConnectionService] onStartCommand action: " + action);
+            if (ACTION_ANSWER_CALL.equals(action) || ACTION_END_CALL.equals(action)) {
+                Log.d(TAG, "[VoiceConnectionService] Forwarding notification action: " + action);
+                Intent localIntent = new Intent(action);
+                if (intent.getExtras() != null) {
+                    localIntent.putExtras(intent.getExtras());
+                }
+                if (ACTION_ANSWER_CALL.equals(action)) {
+                    boolean result = LocalBroadcastManager.getInstance(this).sendBroadcast(localIntent);
+                    Log.d(TAG, "[VoiceConnectionService] Broadcast sent, result: " + result);
+                }
+
+                if (ACTION_ANSWER_CALL.equals(action)) {
+                    String uuid = null;
+                    if (intent.getExtras() != null) {
+                        if (intent.getExtras().containsKey("attributeMap")) {
+                            HashMap<String, String> map = (HashMap<String, String>) intent.getExtras().getSerializable("attributeMap");
+                            if (map != null) uuid = map.get(EXTRA_CALL_UUID);
+                        } else {
+                            uuid = intent.getExtras().getString(EXTRA_CALL_UUID);
+                        }
+                    }
+                    if (uuid != null) {
+                        try {
+                            updateToOngoing(this, uuid);
+                        } catch (Exception e) {}
+                    }
+                }
+                
+                if (ACTION_END_CALL.equals(action)) {
+                    Log.d(TAG, "[VoiceConnectionService] Ending call from notification, stopping foreground service");
+                    String uuid = null;
+                    if (intent.getExtras() != null) {
+                        if (intent.getExtras().containsKey("attributeMap")) {
+                            HashMap<String, String> map = (HashMap<String, String>) intent.getExtras().getSerializable("attributeMap");
+                            if (map != null) uuid = map.get(EXTRA_CALL_UUID);
+                        } else {
+                            uuid = intent.getExtras().getString(EXTRA_CALL_UUID);
+                        }
+                    }
+                    if (uuid != null) {
+                        try {
+                            android.telecom.Connection conn = getConnection(uuid);
+                            if (conn != null) {
+                                conn.onDisconnect();
+                            } else {
+                                deinitConnection(uuid);
+                            }
+                        } catch (Exception e) {}
+                    }
+                }
+            }
+        }
+        return super.onStartCommand(intent, flags, startId);
     }
 
     public static void setPhoneAccountHandle(PhoneAccountHandle phoneAccountHandle) {
@@ -166,6 +231,25 @@ public class VoiceConnectionService extends ConnectionService {
         if (currentConnections.containsKey(connectionId)) {
             currentConnections.remove(connectionId);
         }
+
+
+    }
+
+    public static void updateToOngoing(Context context, String uuid) {
+        if (currentConnectionService != null) {
+            Connection conn = getConnection(uuid);
+            if (conn != null) {
+                com.facebook.react.bridge.WritableMap settings = VoiceConnectionService.getSettings(context);
+                boolean isSelfManaged = false;
+                try {
+                    isSelfManaged = settings != null && settings.hasKey("selfManaged") && settings.getBoolean("selfManaged");
+                } catch (Exception e) {}
+                
+                if (isSelfManaged) {
+                    currentConnectionService.updateForegroundServiceToOngoing(uuid, conn);
+                }
+            }
+        }
     }
 
     public static void setState(String uuid, int state) {
@@ -178,6 +262,7 @@ public class VoiceConnectionService extends ConnectionService {
         switch (state) {
             case Connection.STATE_ACTIVE:
                 conn.setActive();
+                VoiceConnectionService.updateToOngoing(null, uuid);
                 break;
             case Connection.STATE_DIALING:
                 conn.setDialing();
@@ -211,7 +296,8 @@ public class VoiceConnectionService extends ConnectionService {
         incomingCallConnection.setRinging();
         incomingCallConnection.setInitialized();
 
-        startForegroundService(true, name, number != null ? number.getSchemeSpecificPart() : null);
+        Bundle payload = extra.getBundle(EXTRA_PAYLOAD);
+        startForegroundService(true, name, number != null ? number.getSchemeSpecificPart() : null, callUUID, payload);
 
         if (timeout != null) {
             this.checkForAppReachability(callUUID, timeout);
@@ -278,7 +364,7 @@ public class VoiceConnectionService extends ConnectionService {
         outgoingCallConnection.setAudioModeIsVoip(true);
         outgoingCallConnection.setCallerDisplayName(displayName, TelecomManager.PRESENTATION_ALLOWED);
 
-        startForegroundService(false, displayName, number);
+        startForegroundService(false, displayName, number, uuid, null);
 
         // ‍️Weirdly on some Samsung phones (A50, S9...) using `setInitialized` will not display the native UI ...
         // when making a call from the native Phone application. The call will still be displayed correctly without it.
@@ -297,7 +383,7 @@ public class VoiceConnectionService extends ConnectionService {
         return outgoingCallConnection;
     }
 
-    private void startForegroundService(boolean isIncomingCall, String callerName, String callerNumber) {
+    private void startForegroundService(boolean isIncomingCall, String callerName, String callerNumber, String callUUID, @Nullable Bundle payload) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             // Foreground services not required before SDK 28
             return;
@@ -344,13 +430,22 @@ public class VoiceConnectionService extends ConnectionService {
 
         String NOTIFICATION_CHANNEL_ID = foregroundSettings.getString("channelId");
         if (isSelfManaged && isIncomingCall) {
-            NOTIFICATION_CHANNEL_ID += "_incoming";
+            NOTIFICATION_CHANNEL_ID += "_incoming_call";
         }
         String channelName = foregroundSettings.getString("channelName");
         int importance = (isSelfManaged && isIncomingCall) ? NotificationManager.IMPORTANCE_HIGH : NotificationManager.IMPORTANCE_NONE;
         
         NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, importance);
         chan.setLockscreenVisibility((isSelfManaged && isIncomingCall) ? Notification.VISIBILITY_PUBLIC : Notification.VISIBILITY_PRIVATE);
+        
+        if (isSelfManaged && isIncomingCall) {
+            Uri ringtoneUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE);
+            chan.setSound(ringtoneUri, new android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build());
+        }
+
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         assert manager != null;
         manager.createNotificationChannel(chan);
@@ -358,37 +453,151 @@ public class VoiceConnectionService extends ConnectionService {
         NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
         notificationBuilder.setOngoing(true);
 
+        android.widget.RemoteViews customView = null;
+        android.widget.RemoteViews customSmallView = null;
+
         if (isSelfManaged && isIncomingCall) {
-            notificationBuilder.setContentTitle(resolvedContactName != null ? resolvedContactName : foregroundSettings.getString("notificationTitle"))
-                .setContentText("Incoming call...")
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setCategory(NotificationCompat.CATEGORY_CALL);
-            if (contactPhoto != null) {
-                notificationBuilder.setLargeIcon(contactPhoto);
+            String packageName = getPackageName();
+            int layoutId = getResources().getIdentifier("layout_custom_notification", "layout", packageName);
+            int smallLayoutId = getResources().getIdentifier("layout_custom_small_ex_notification", "layout", packageName);
+            
+            if (layoutId != 0 && smallLayoutId != 0) {
+                customView = new android.widget.RemoteViews(packageName, layoutId);
+                customSmallView = new android.widget.RemoteViews(packageName, smallLayoutId);
+                
+                String displayName = resolvedContactName != null ? resolvedContactName : foregroundSettings.getString("notificationTitle");
+                
+                customView.setTextViewText(getResources().getIdentifier("tvNameCaller", "id", packageName), displayName);
+                customSmallView.setTextViewText(getResources().getIdentifier("tvNameCaller", "id", packageName), displayName);
+                
+                if (callerNumber != null) {
+                    customView.setTextViewText(getResources().getIdentifier("tvNumber", "id", packageName), callerNumber);
+                    customSmallView.setTextViewText(getResources().getIdentifier("tvNumber", "id", packageName), callerNumber);
+                }
+                if (contactPhoto != null) {
+                    customView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), contactPhoto);
+                    customView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                    customSmallView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), contactPhoto);
+                    customSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                }
+
+                notificationBuilder.setCustomContentView(customSmallView);
+                notificationBuilder.setCustomBigContentView(customView);
+                notificationBuilder.setCustomHeadsUpContentView(customSmallView);
+            } else {
+                notificationBuilder.setContentTitle(resolvedContactName != null ? resolvedContactName : foregroundSettings.getString("notificationTitle"))
+                    .setContentText("Incoming call...");
+                if (contactPhoto != null) {
+                    notificationBuilder.setLargeIcon(contactPhoto);
+                }
             }
+            notificationBuilder.setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL);
         } else {
             notificationBuilder.setContentTitle(foregroundSettings.getString("notificationTitle"))
                 .setPriority(NotificationCompat.PRIORITY_MIN)
                 .setCategory(NotificationCompat.CATEGORY_SERVICE);
         }
 
-        Activity currentActivity = RNCallKeepModule.instance.getCurrentReactActivity();
-        if (currentActivity != null) {
-            Intent notificationIntent = new Intent(this, currentActivity.getClass());
-            int flags = Intent.FLAG_ACTIVITY_SINGLE_TOP;
-            if (isSelfManaged && isIncomingCall) {
-                flags |= Intent.FLAG_ACTIVITY_NEW_TASK;
+        final int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
+
+        if (isSelfManaged && isIncomingCall) {
+            Intent fullScreenIntent = new Intent(this, IncomingCallActivity.class);
+            fullScreenIntent.putExtra(EXTRA_CALL_UUID, callUUID);
+            fullScreenIntent.putExtra(EXTRA_CALLER_NAME, resolvedContactName != null ? resolvedContactName : foregroundSettings.getString("notificationTitle"));
+            fullScreenIntent.putExtra(EXTRA_CALL_NUMBER, callerNumber);
+            if (payload != null) {
+                fullScreenIntent.putExtra(EXTRA_PAYLOAD, payload);
             }
-            notificationIntent.addFlags(flags);
-
-            final int flag =  Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
-
-            PendingIntent pendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, notificationIntent, flag);
-
-            notificationBuilder.setContentIntent(pendingIntent);
+            fullScreenIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
             
-            if (isSelfManaged && isIncomingCall) {
-                notificationBuilder.setFullScreenIntent(pendingIntent, true);
+            PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, fullScreenIntent, flag);
+            
+            android.app.KeyguardManager keyguardManager = (android.app.KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+            android.os.PowerManager powerManager = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+            boolean isScreenOn = powerManager != null && powerManager.isInteractive();
+            boolean isLocked = keyguardManager != null && keyguardManager.isKeyguardLocked();
+            
+            notificationBuilder.setFullScreenIntent(fullScreenPendingIntent, true);
+            notificationBuilder.setContentIntent(fullScreenPendingIntent);
+
+            Intent answerIntent = new Intent(this, VoiceConnectionService.class);
+            answerIntent.setAction(ACTION_ANSWER_CALL);
+            Bundle answerExtras = new Bundle();
+            HashMap<String, String> answerMap = new HashMap<>();
+            answerMap.put(EXTRA_CALL_UUID, callUUID);
+            answerMap.put(EXTRA_CALL_NUMBER, callerNumber);
+            answerMap.put(EXTRA_CALLER_NAME, resolvedContactName);
+            answerExtras.putSerializable("attributeMap", answerMap);
+            if (payload != null) {
+                answerExtras.putBundle(EXTRA_PAYLOAD, payload);
+            }
+            answerIntent.putExtras(answerExtras);
+            PendingIntent answerPendingIntent = PendingIntent.getService(this, 1, answerIntent, flag);
+
+            Intent declineIntent = new Intent(this, VoiceConnectionService.class);
+            declineIntent.setAction(ACTION_END_CALL);
+            Bundle declineExtras = new Bundle();
+            HashMap<String, String> declineMap = new HashMap<>();
+            declineMap.put(EXTRA_CALL_UUID, callUUID);
+            declineMap.put(EXTRA_CALL_NUMBER, callerNumber);
+            declineMap.put(EXTRA_CALLER_NAME, resolvedContactName);
+            declineExtras.putSerializable("attributeMap", declineMap);
+            declineIntent.putExtras(declineExtras);
+            PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
+
+            if (customView != null) {
+                String packageName = getPackageName();
+                customView.setOnClickPendingIntent(getResources().getIdentifier("llAccept", "id", packageName), answerPendingIntent);
+                customView.setOnClickPendingIntent(getResources().getIdentifier("llDecline", "id", packageName), declinePendingIntent);
+                
+                customSmallView.setOnClickPendingIntent(getResources().getIdentifier("llAccept", "id", packageName), answerPendingIntent);
+                customSmallView.setOnClickPendingIntent(getResources().getIdentifier("llDecline", "id", packageName), declinePendingIntent);
+                
+                final String avatarUrl = payload != null ? payload.getString("avatarUrl") : null;
+                if (avatarUrl != null && !avatarUrl.isEmpty() && contactPhoto == null) {
+                    final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                    final android.widget.RemoteViews finalCustomView = customView;
+                    final android.widget.RemoteViews finalCustomSmallView = customSmallView;
+                    final NotificationCompat.Builder finalBuilder = notificationBuilder;
+                    new Thread(() -> {
+                        try {
+                            java.net.URL url = new java.net.URL(avatarUrl);
+                            java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+                            connection.setDoInput(true);
+                            connection.connect();
+                            java.io.InputStream input = connection.getInputStream();
+                            android.graphics.Bitmap myBitmap = android.graphics.BitmapFactory.decodeStream(input);
+                            if (myBitmap != null) {
+                                finalCustomView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), myBitmap);
+                                finalCustomView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                                finalCustomSmallView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), myBitmap);
+                                finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                                
+                                Notification updatedNotification = finalBuilder.build();
+                                notificationManager.notify(NOTIFICATION_ID, updatedNotification);
+                            }
+                        } catch (Exception e) {
+                            Log.w(TAG, "[VoiceConnectionService] Failed to load avatar for notification", e);
+                        }
+                    }).start();
+                }
+            } else {
+                notificationBuilder.addAction(0, "Decline", declinePendingIntent);
+                notificationBuilder.addAction(0, "Accept", answerPendingIntent);
+            }
+
+            Log.d(TAG, "[VoiceConnectionService] notification buttons added using flutter_callkit exact logic");
+
+            // The OS will automatically launch the full screen intent if the screen is locked
+            // or show the heads-up notification if the screen is unlocked.
+        } else {
+            Activity currentActivity = RNCallKeepModule.instance != null ? RNCallKeepModule.instance.getCurrentReactActivity() : null;
+            if (currentActivity != null) {
+                Intent notificationIntent = new Intent(this, currentActivity.getClass());
+                notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                PendingIntent pendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, notificationIntent, flag);
+                notificationBuilder.setContentIntent(pendingIntent);
             }
         }
 
@@ -402,25 +611,164 @@ public class VoiceConnectionService extends ConnectionService {
         Log.d(TAG, "[VoiceConnectionService] Starting foreground service");
 
         Notification notification = notificationBuilder.build();
+        if (isSelfManaged && isIncomingCall) {
+            notification.flags |= Notification.FLAG_INSISTENT;
+        }
 
         try {
-            startForeground(FOREGROUND_SERVICE_TYPE_MICROPHONE, notification);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
         } catch (Exception e) {
             Log.w(TAG, "[VoiceConnectionService] Can't start foreground service : " + e.toString());
         }
     }
 
-    private void stopForegroundService() {
-        Log.d(TAG, "[VoiceConnectionService] stopForegroundService");
+    public void updateForegroundServiceToOngoing(String uuid, Connection conn) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         ReadableMap foregroundSettings = getForegroundSettings(null);
+        if (foregroundSettings == null || !foregroundSettings.hasKey("channelId")) return;
 
-        if (!this.isForegroundServiceConfigured()) {
-            Log.w(TAG, "[VoiceConnectionService] Not creating foregroundService because not configured");
-            return;
+        String NOTIFICATION_CHANNEL_ID = foregroundSettings.getString("channelId");
+        String channelName = foregroundSettings.getString("channelName");
+        int importance = NotificationManager.IMPORTANCE_HIGH;
+
+        NotificationChannel chan = new NotificationChannel(NOTIFICATION_CHANNEL_ID, channelName, importance);
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) manager.createNotificationChannel(chan);
+
+        NotificationCompat.Builder notificationBuilder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID);
+        notificationBuilder.setOngoing(true);
+
+        Bundle extras = conn.getExtras();
+        String callerName = extras != null ? extras.getString(EXTRA_CALLER_NAME) : foregroundSettings.getString("notificationTitle");
+        String callerNumber = extras != null ? extras.getString(EXTRA_CALL_NUMBER) : "";
+
+        String packageName = getPackageName();
+        int layoutId = getResources().getIdentifier("layout_custom_ongoing_notification", "layout", packageName);
+        int smallLayoutId = getResources().getIdentifier("layout_custom_small_ongoing_notification", "layout", packageName);
+
+        final int flag = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE : PendingIntent.FLAG_UPDATE_CURRENT;
+
+        Intent declineIntent = new Intent(this, VoiceConnectionService.class);
+        declineIntent.setAction(ACTION_END_CALL);
+        Bundle declineExtras = new Bundle();
+        HashMap<String, String> declineMap = new HashMap<>();
+        declineMap.put(EXTRA_CALL_UUID, uuid);
+        declineExtras.putSerializable("attributeMap", declineMap);
+        declineIntent.putExtras(declineExtras);
+        PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
+
+        if (layoutId != 0 && smallLayoutId != 0) {
+            android.widget.RemoteViews customView = new android.widget.RemoteViews(packageName, layoutId);
+            android.widget.RemoteViews customSmallView = new android.widget.RemoteViews(packageName, smallLayoutId);
+
+            customView.setTextViewText(getResources().getIdentifier("tvNameCaller", "id", packageName), callerName != null ? callerName : "Ongoing call");
+            customSmallView.setTextViewText(getResources().getIdentifier("tvNameCaller", "id", packageName), callerName != null ? callerName : "Ongoing call");
+            
+            if (callerNumber != null && !callerNumber.isEmpty()) {
+                customView.setTextViewText(getResources().getIdentifier("tvNumber", "id", packageName), callerNumber);
+                customSmallView.setTextViewText(getResources().getIdentifier("tvNumber", "id", packageName), callerNumber);
+            }
+
+            customView.setOnClickPendingIntent(getResources().getIdentifier("llHangup", "id", packageName), declinePendingIntent);
+            int tvHangupId = getResources().getIdentifier("tvHangUp", "id", packageName);
+            if (tvHangupId != 0) {
+                customView.setTextViewText(tvHangupId, "End Call");
+            }
+
+            // Avatar loading
+            final String avatarUrl = extras != null && extras.containsKey(EXTRA_PAYLOAD) && extras.getBundle(EXTRA_PAYLOAD) != null 
+                    ? extras.getBundle(EXTRA_PAYLOAD).getString("avatarUrl") : null;
+            
+            if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                final android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                final android.widget.RemoteViews finalCustomView = customView;
+                final android.widget.RemoteViews finalCustomSmallView = customSmallView;
+                final NotificationCompat.Builder finalBuilder = notificationBuilder;
+                new Thread(() -> {
+                    try {
+                        java.net.URL url = new java.net.URL(avatarUrl);
+                        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) url.openConnection();
+                        connection.setDoInput(true);
+                        connection.connect();
+                        java.io.InputStream input = connection.getInputStream();
+                        android.graphics.Bitmap myBitmap = android.graphics.BitmapFactory.decodeStream(input);
+                        if (myBitmap != null) {
+                            finalCustomView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), myBitmap);
+                            finalCustomView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                            finalCustomSmallView.setImageViewBitmap(getResources().getIdentifier("ivAvatar", "id", packageName), myBitmap);
+                            finalCustomSmallView.setViewVisibility(getResources().getIdentifier("ivAvatar", "id", packageName), android.view.View.VISIBLE);
+                            
+                            Notification updatedNotification = finalBuilder.build();
+                            notificationManager.notify(NOTIFICATION_ID, updatedNotification);
+                        }
+                    } catch (Exception e) {
+                        Log.w(TAG, "[VoiceConnectionService] Failed to load avatar for ongoing notification", e);
+                    }
+                }).start();
+            }
+
+            notificationBuilder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+            notificationBuilder.setCustomContentView(customSmallView);
+            notificationBuilder.setCustomBigContentView(customView);
+        } else {
+            notificationBuilder.setContentTitle(callerName != null && !callerName.isEmpty() ? callerName : foregroundSettings.getString("notificationTitle"))
+                .setContentText("Ongoing call")
+                .addAction(0, "End Call", declinePendingIntent);
         }
 
+        notificationBuilder.setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE);
+
+        if (foregroundSettings.hasKey("notificationIcon")) {
+            Context context = this.getApplicationContext();
+            String smallIcon = foregroundSettings.getString("notificationIcon");
+            int iconId = context.getResources().getIdentifier(smallIcon, "mipmap", context.getPackageName());
+            if (iconId != 0) {
+                notificationBuilder.setSmallIcon(iconId);
+            }
+        }
+
+        Activity currentActivity = RNCallKeepModule.instance != null ? RNCallKeepModule.instance.getCurrentReactActivity() : null;
+        if (currentActivity != null) {
+            Intent notificationIntent = new Intent(this, currentActivity.getClass());
+            notificationIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            PendingIntent pendingIntent = PendingIntent.getActivity(this, NOTIFICATION_ID, notificationIntent, flag);
+            notificationBuilder.setContentIntent(pendingIntent);
+        }
+
+        Notification notification = notificationBuilder.build();
+        
         try {
-            stopForeground(FOREGROUND_SERVICE_TYPE_MICROPHONE);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                stopForeground(true);
+            }
+            startForeground(NOTIFICATION_ID, notification);
+        } catch (Exception e) {
+            if (manager != null) {
+                manager.notify(NOTIFICATION_ID, notification);
+            }
+        }
+    }
+
+    public void stopForegroundService() {
+        Log.d(TAG, "[VoiceConnectionService] stopForegroundService");
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE);
+            } else {
+                stopForeground(true);
+            }
+            android.app.NotificationManager notificationManager = (android.app.NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+            if (notificationManager != null) {
+                notificationManager.cancel(NOTIFICATION_ID);
+            }
         } catch (Exception e) {
             Log.w(TAG, "[VoiceConnectionService] can't stop foreground service :" + e.toString());
         }
@@ -522,15 +870,17 @@ public class VoiceConnectionService extends ConnectionService {
         if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Context context = getApplicationContext();
             TelecomManager telecomManager = (TelecomManager) context.getSystemService(context.TELECOM_SERVICE);
-            PhoneAccount phoneAccount = telecomManager.getPhoneAccount(request.getAccountHandle());
-
-            //If the phone account is self managed, then this connection must also be self managed.
-            if((phoneAccount.getCapabilities() & PhoneAccount.CAPABILITY_SELF_MANAGED) == PhoneAccount.CAPABILITY_SELF_MANAGED) {
-                Log.d(TAG, "[VoiceConnectionService] PhoneAccount is SELF_MANAGED, so connection will be too");
+            try {
+                PhoneAccount phoneAccount = telecomManager.getPhoneAccount(request.getAccountHandle());
+                if(phoneAccount != null && (phoneAccount.getCapabilities() & PhoneAccount.CAPABILITY_SELF_MANAGED) == PhoneAccount.CAPABILITY_SELF_MANAGED) {
+                    Log.d(TAG, "[VoiceConnectionService] PhoneAccount is SELF_MANAGED, so connection will be too");
+                    connection.setConnectionProperties(Connection.PROPERTY_SELF_MANAGED);
+                } else {
+                    Log.d(TAG, "[VoiceConnectionService] PhoneAccount is not SELF_MANAGED, so connection won't be either");
+                }
+            } catch (SecurityException e) {
+                Log.w(TAG, "[VoiceConnectionService] SecurityException when getting phone account. Assuming SELF_MANAGED.", e);
                 connection.setConnectionProperties(Connection.PROPERTY_SELF_MANAGED);
-            }
-            else {
-                Log.d(TAG, "[VoiceConnectionService] PhoneAccount is not SELF_MANAGED, so connection won't be either");
             }
         }
 
@@ -568,7 +918,6 @@ public class VoiceConnectionService extends ConnectionService {
         this.addConference(voiceConference);
     }
 
-    @Override
     public void onCreateIncomingConnectionFailed(PhoneAccountHandle connectionManagerPhoneAccount, ConnectionRequest request) {
         super.onCreateIncomingConnectionFailed(connectionManagerPhoneAccount, request);
         Log.w(TAG, "[VoiceConnectionService] onCreateIncomingConnectionFailed: " + request);

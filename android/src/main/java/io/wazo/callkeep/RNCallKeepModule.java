@@ -189,7 +189,7 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
     public void reportNewIncomingCall(String uuid, String number, String callerName, boolean hasVideo, String payload) {
         Log.d(TAG, "[RNCallKeepModule] reportNewIncomingCall, uuid: " + uuid + ", number: " + number + ", callerName: " + callerName);
 
-        this.displayIncomingCall(uuid, number, callerName, hasVideo);
+        this.displayIncomingCall(uuid, number, callerName, hasVideo, (Bundle) null);
 
         // Send event to JS
         WritableMap args = Arguments.createMap();
@@ -434,14 +434,15 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
         this.hasListeners = false;
     }
 
-    @ReactMethod
     public void displayIncomingCall(String uuid, String number, String callerName) {
-        this.displayIncomingCall(uuid, number, callerName, false, null);
+        this.displayIncomingCall(uuid, number, callerName, false, (Bundle) null);
     }
 
     @ReactMethod
-    public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo) {
-        this.displayIncomingCall(uuid, number, callerName, hasVideo, null);
+    public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo, @Nullable ReadableMap options) {
+        Log.d(TAG, "[RNCallKeepModule] displayIncomingCall options received: " + (options != null ? options.toHashMap().toString() : "null"));
+        Bundle payload = options != null ? Arguments.toBundle(options) : null;
+        this.displayIncomingCall(uuid, number, callerName, hasVideo, payload);
     }
 
     public void displayIncomingCall(String uuid, String number, String callerName, boolean hasVideo, @Nullable Bundle payload) {
@@ -483,7 +484,6 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
         conn.onAnswer();
     }
 
-    @ReactMethod
     public void startCall(String uuid, String number, String callerName) {
         this.startCall(uuid, number, callerName, false, null);
     }
@@ -756,7 +756,7 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
        this.stopListenToNativeCallsState();
        Log.d(TAG, "[RNCallKeepModule] onHostDestroy executed");
        // This line will kill the android process after ending all calls
-       android.os.Process.killProcess(android.os.Process.myPid());
+       // android.os.Process.killProcess(android.os.Process.myPid());
    }
 
     @ReactMethod
@@ -1295,6 +1295,12 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
                 case ACTION_ANSWER_CALL:
                     args.putString("callUUID", attributeMap.get(EXTRA_CALL_UUID));
                     args.putBoolean("withVideo", Boolean.valueOf(attributeMap.get(EXTRA_HAS_VIDEO)));
+                    
+                    Bundle payload = intent.getBundleExtra(EXTRA_PAYLOAD);
+                    if (payload != null) {
+                        args.putMap("payload", Arguments.fromBundle(payload));
+                    }
+
                     sendEventToJS("RNCallKeepPerformAnswerCallAction", args);
                     break;
                 case ACTION_HOLD_CALL:

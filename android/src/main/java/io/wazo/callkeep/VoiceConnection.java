@@ -61,6 +61,24 @@ public class VoiceConnection extends Connection {
     private Context context;
     private static final String TAG = "RNCallKeep";
 
+    private Handler timeoutHandler = new Handler();
+    private Runnable timeoutRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (!answered && !rejected) {
+                Log.d(TAG, "[VoiceConnection] auto-rejecting call after 45s timeout");
+                setDisconnected(new DisconnectCause(DisconnectCause.MISSED));
+                sendCallRequestToActivity(ACTION_END_CALL, handle);
+                try {
+                    ((VoiceConnectionService) context).stopForegroundService();
+                    ((VoiceConnectionService) context).deinitConnection(handle.get(EXTRA_CALL_UUID));
+                } catch (Exception e) {}
+                destroy();
+                rejected = true;
+            }
+        }
+    };
+
     VoiceConnection(Context context, HashMap<String, String> handle) {
         super();
         this.handle = handle;
@@ -75,6 +93,9 @@ public class VoiceConnection extends Connection {
         if (name != null && !name.equals("")) {
             setCallerDisplayName(name, TelecomManager.PRESENTATION_ALLOWED);
         }
+
+        // Auto-end call after 45 seconds
+        timeoutHandler.postDelayed(timeoutRunnable, 45000);
     }
 
     @Override
@@ -140,6 +161,7 @@ public class VoiceConnection extends Connection {
             Log.e(TAG, "[VoiceConnection] onDisconnect handle map error", exception);
         }
         destroy();
+        rejected = true;
     }
 
     public void reportDisconnect(int reason) {
@@ -166,6 +188,7 @@ public class VoiceConnection extends Connection {
         }
         ((VoiceConnectionService)context).deinitConnection(handle.get(EXTRA_CALL_UUID));
         destroy();
+        rejected = true;
     }
 
     @Override
@@ -180,6 +203,7 @@ public class VoiceConnection extends Connection {
             Log.e(TAG, "[VoiceConnection] onAbort handle map error", exception);
         }
         destroy();
+        rejected = true;
     }
 
     @Override
@@ -269,7 +293,6 @@ public class VoiceConnection extends Connection {
         Log.d(TAG, "[VoiceConnection] onStateChanged called, state : " + state);
     }
 
-    @Override
     public void onSilence() {
         // onSilence was added on API level 29
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -311,6 +334,12 @@ public class VoiceConnection extends Connection {
         sendCallRequestToActivity(ACTION_ANSWER_CALL, handle);
         sendCallRequestToActivity(ACTION_AUDIO_SESSION, handle);
         Log.d(TAG, "[VoiceConnection] onAnswer executed");
+
+        try {
+            VoiceConnectionService.updateToOngoing(context, handle.get(EXTRA_CALL_UUID));
+        } catch (Exception e) {
+            Log.e(TAG, "[VoiceConnection] failed to update ongoing UI", e);
+        }
     }
 
     private void _onReject(int rejectReason, String replyMessage) {
