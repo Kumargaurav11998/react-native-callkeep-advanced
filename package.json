@@ -1,6 +1,6 @@
 {
   "name": "react-native-callkeep-advanced",
-  "version": "4.3.37",
+  "version": "0.0.1",
   "description": "iOS CallKit framework and Android ConnectionService for React Native",
   "main": "index.js",
   "scripts": {},
