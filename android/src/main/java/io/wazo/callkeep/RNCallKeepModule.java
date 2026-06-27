@@ -1006,6 +1006,9 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
             return;
         }
 
+        if (conn instanceof VoiceConnection) {
+            ((VoiceConnection) conn).cancelTimeout();
+        }
         conn.setConnectionCapabilities(conn.getConnectionCapabilities() | Connection.CAPABILITY_HOLD);
         conn.setActive();
     }

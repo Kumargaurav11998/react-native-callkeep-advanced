@@ -107,6 +107,10 @@ public class VoiceConnection extends Connection {
         }
     }
 
+    public void cancelTimeout() {
+        timeoutHandler.removeCallbacks(timeoutRunnable);
+    }
+
     @Override
     public void onCallAudioStateChanged(CallAudioState state) {
         Log.d(TAG, "[VoiceConnection] onCallAudioStateChanged muted :" + (state.isMuted() ? "true" : "false"));
@@ -152,6 +156,7 @@ public class VoiceConnection extends Connection {
     @Override
     public void onDisconnect() {
         super.onDisconnect();
+        timeoutHandler.removeCallbacks(timeoutRunnable);
         setDisconnected(new DisconnectCause(DisconnectCause.LOCAL));
         sendCallRequestToActivity(ACTION_END_CALL, handle);
         Log.d(TAG, "[VoiceConnection] onDisconnect executed");
@@ -166,6 +171,7 @@ public class VoiceConnection extends Connection {
 
     public void reportDisconnect(int reason) {
         super.onDisconnect();
+        timeoutHandler.removeCallbacks(timeoutRunnable);
         switch (reason) {
             case 1:
                 setDisconnected(new DisconnectCause(DisconnectCause.ERROR));
@@ -194,6 +200,7 @@ public class VoiceConnection extends Connection {
     @Override
     public void onAbort() {
         super.onAbort();
+        timeoutHandler.removeCallbacks(timeoutRunnable);
         setDisconnected(new DisconnectCause(DisconnectCause.REJECTED));
         sendCallRequestToActivity(ACTION_END_CALL, handle);
         Log.d(TAG, "[VoiceConnection] onAbort executed");
@@ -327,6 +334,7 @@ public class VoiceConnection extends Connection {
             return;
         }
         answered = true;
+        timeoutHandler.removeCallbacks(timeoutRunnable);
 
         setConnectionCapabilities(getConnectionCapabilities() | Connection.CAPABILITY_HOLD);
         setAudioModeIsVoip(true);
@@ -348,6 +356,7 @@ public class VoiceConnection extends Connection {
             return;
         }
         rejected = true;
+        timeoutHandler.removeCallbacks(timeoutRunnable);
 
         setDisconnected(new DisconnectCause(DisconnectCause.REJECTED));
         sendCallRequestToActivity(ACTION_END_CALL, handle);
