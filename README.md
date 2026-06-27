@@ -1,9 +1,11 @@
-# React Native CallKeep
+# React Native CallKeep Advanced
 
-[![npm version](https://badge.fury.io/js/react-native-callkeep.svg)](https://badge.fury.io/js/react-native-callkeep)
-[![npm downloads](https://img.shields.io/npm/dm/react-native-callkeep.svg?maxAge=2592000)](https://img.shields.io/npm/dm/react-native-callkeep.svg?maxAge=2592000)
+[![npm version](https://badge.fury.io/js/react-native-callkeep-advanced.svg)](https://badge.fury.io/js/react-native-callkeep-advanced)
+[![npm downloads](https://img.shields.io/npm/dm/react-native-callkeep-advanced.svg?maxAge=2592000)](https://img.shields.io/npm/dm/react-native-callkeep-advanced.svg?maxAge=2592000)
 
-**React Native CallKeep** utilises a brand new iOS 10 framework **CallKit** and Android **ConnectionService** to make the life easier for VoIP developers using React Native.
+**React Native CallKeep Advanced** utilises a brand new iOS 10 framework **CallKit** and Android **ConnectionService** to make the life easier for VoIP developers using React Native.
+
+**Feel free to add an issue if you face any problems! We are constantly updating and adding new features.**
 
 For more information about **CallKit** on iOS, please see [Official CallKit Framework Document](https://developer.apple.com/reference/callkit?language=objc) or [Introduction to CallKit by Xamarin](https://developer.xamarin.com/guides/ios/platform_features/introduction-to-ios10/callkit/)
 
@@ -29,7 +31,8 @@ For more information about **ConnectionService** on Android, please see [Android
 
 
 # Demo
-A demo of `react-native-callkeep` is available in the [wazo-react-native-demo](https://github.com/wazo-pbx/wazo-react-native-demo) repository.
+A complete working example of `react-native-callkeep-advanced` is available in the `example` folder of this repository. You can check it out here:
+[Example App](https://github.com/Kumargaurav11998/react-native-callkeep-advanced/tree/main/example)
 
 #### Android
 ![Connection Service](docs/pictures/connection-service.jpg)
