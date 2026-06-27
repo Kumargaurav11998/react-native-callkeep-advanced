@@ -19,6 +19,7 @@ package io.wazo.callkeep;
 
 import static io.wazo.callkeep.Constants.ACTION_ANSWER_CALL;
 import static io.wazo.callkeep.Constants.ACTION_END_CALL;
+import static io.wazo.callkeep.Constants.ACTION_DISMISS_INCOMING_NOTIFICATION;
 
 import android.annotation.TargetApi;
 import android.app.ActivityManager;
@@ -170,6 +171,36 @@ public class VoiceConnectionService extends ConnectionService {
                                 deinitConnection(uuid);
                             }
                         } catch (Exception e) {}
+                    }
+                }
+            }
+
+            if (ACTION_DISMISS_INCOMING_NOTIFICATION.equals(action)) {
+                Log.d(TAG, "[VoiceConnectionService] Dismiss incoming notification received, checking call state");
+                String uuid = null;
+                String callerNumber = null;
+                String callerName = null;
+                Bundle payload = null;
+                if (intent.getExtras() != null) {
+                    if (intent.getExtras().containsKey("attributeMap")) {
+                        HashMap<String, String> map = (HashMap<String, String>) intent.getExtras().getSerializable("attributeMap");
+                        if (map != null) {
+                            uuid = map.get(EXTRA_CALL_UUID);
+                            callerNumber = map.get(EXTRA_CALL_NUMBER);
+                            callerName = map.get(EXTRA_CALLER_NAME);
+                        }
+                    }
+                    payload = intent.getExtras().getBundle(EXTRA_PAYLOAD);
+                }
+                if (uuid != null) {
+                    try {
+                        android.telecom.Connection conn = getConnection(uuid);
+                        if (conn != null && conn.getState() == Connection.STATE_RINGING) {
+                            Log.d(TAG, "[VoiceConnectionService] Call is still ringing, recreating notification to prevent dismiss");
+                            startForegroundService(true, callerName, callerNumber, uuid, payload);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "[VoiceConnectionService] Failed to recreate dismissed notification", e);
                     }
                 }
             }
@@ -545,7 +576,21 @@ public class VoiceConnectionService extends ConnectionService {
             declineExtras.putSerializable("attributeMap", declineMap);
             declineIntent.putExtras(declineExtras);
             PendingIntent declinePendingIntent = PendingIntent.getService(this, 2, declineIntent, flag);
-            notificationBuilder.setDeleteIntent(declinePendingIntent);
+            
+            Intent dismissIntent = new Intent(this, VoiceConnectionService.class);
+            dismissIntent.setAction(ACTION_DISMISS_INCOMING_NOTIFICATION);
+            Bundle dismissExtras = new Bundle();
+            HashMap<String, String> dismissMap = new HashMap<>();
+            dismissMap.put(EXTRA_CALL_UUID, callUUID);
+            dismissMap.put(EXTRA_CALL_NUMBER, callerNumber);
+            dismissMap.put(EXTRA_CALLER_NAME, resolvedContactName);
+            dismissExtras.putSerializable("attributeMap", dismissMap);
+            if (payload != null) {
+                dismissExtras.putBundle(EXTRA_PAYLOAD, payload);
+            }
+            dismissIntent.putExtras(dismissExtras);
+            PendingIntent dismissPendingIntent = PendingIntent.getService(this, 3, dismissIntent, flag);
+            notificationBuilder.setDeleteIntent(dismissPendingIntent);
 
             if (customView != null) {
                 String packageName = getPackageName();
