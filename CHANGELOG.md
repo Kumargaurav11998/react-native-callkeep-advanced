@@ -10,5 +10,6 @@ All notable changes to this project will be documented in this file.
 - **Avatar Option**: Added support for remote `avatarUrl` in the incoming call payload.
 
 ### Fixed
+- **Call Auto Decline Bug**: Fixed an issue where the call would automatically decline after 45 seconds even after being accepted.
 - **Notification Visibility Bug**: Fixed an issue where the incoming call notification would not show up at all if the avatar option was not passed or left blank.
 - **Metro Bundler Fix**: Resolved package export issues relating to Metro configuration on newer React Native versions.

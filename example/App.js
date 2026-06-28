@@ -106,6 +106,33 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 14,
   },
+  callControls: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  controlButton: {
+    width: '48%',
+    backgroundColor: '#334155',
+    borderRadius: 12,
+    padding: 15,
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  controlButtonActive: {
+    backgroundColor: theme.primary,
+  },
+  controlButtonDanger: {
+    width: '100%',
+    backgroundColor: theme.danger,
+    marginTop: 10,
+  },
+  controlButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
 RNCallKeep.setup({
@@ -130,6 +157,12 @@ RNCallKeep.setup({
 export default function App() {
   const [logs, setLogs] = useState([]);
   const [lastPayload, setLastPayload] = useState(null);
+  
+  // Active Call State
+  const [activeCallUUID, setActiveCallUUID] = useState(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isOnHold, setIsOnHold] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(false);
 
   const log = (text) => {
     console.info(text);
@@ -164,14 +197,45 @@ export default function App() {
     RNCallKeep.addEventListener('endCall', handleEndCall);
     RNCallKeep.addEventListener('didDisplayIncomingCall', handleDisplayCall);
     RNCallKeep.addEventListener('showIncomingCallUi', handleShowIncomingCallUi);
+    
+    // New Listeners for Hardware/OS Events
+    RNCallKeep.addEventListener('didPerformSetMutedCallAction', handleMuteAction);
+    RNCallKeep.addEventListener('didToggleHoldCallAction', handleHoldAction);
+    RNCallKeep.addEventListener('didPerformDTMFAction', handleDTMFAction);
+    RNCallKeep.addEventListener('didChangeAudioRoute', handleAudioRouteAction);
 
     return () => {
       RNCallKeep.removeEventListener('answerCall', handleAnswerCall);
       RNCallKeep.removeEventListener('endCall', handleEndCall);
       RNCallKeep.removeEventListener('didDisplayIncomingCall', handleDisplayCall);
       RNCallKeep.removeEventListener('showIncomingCallUi', handleShowIncomingCallUi);
+      
+      RNCallKeep.removeEventListener('didPerformSetMutedCallAction', handleMuteAction);
+      RNCallKeep.removeEventListener('didToggleHoldCallAction', handleHoldAction);
+      RNCallKeep.removeEventListener('didPerformDTMFAction', handleDTMFAction);
+      RNCallKeep.removeEventListener('didChangeAudioRoute', handleAudioRouteAction);
     };
   }, []);
+
+  // Hardware/OS Listener Handlers
+  const handleMuteAction = ({ muted, callUUID }) => {
+    log(`[Mute Action] System requested mute: ${muted} for call: ${callUUID.split('-')[0]}`);
+    setIsMuted(muted);
+  };
+
+  const handleHoldAction = ({ hold, callUUID }) => {
+    log(`[Hold Action] System requested hold: ${hold} for call: ${callUUID.split('-')[0]}`);
+    setIsOnHold(hold);
+  };
+
+  const handleDTMFAction = ({ digits, callUUID }) => {
+    log(`[DTMF Action] System requested DTMF: ${digits} for call: ${callUUID.split('-')[0]}`);
+  };
+
+  const handleAudioRouteAction = ({ output }) => {
+    log(`[Audio Route] System changed audio route to: ${output}`);
+    setIsSpeaker(output === 'Speaker');
+  };
 
   const handleAnswerCall = (event) => {
     const { callUUID, payload } = event;
@@ -181,12 +245,13 @@ export default function App() {
       setLastPayload(payload);
     }
     RNCallKeep.setCurrentCallActive(callUUID);
+    setActiveCallUUID(callUUID); // Show active call UI
   };
 
   const handleEndCall = (event) => {
     const { callUUID } = event;
     log(`Ended/Declined call: ${callUUID.split('-')[0]}`);
-   
+    setActiveCallUUID(null);
   };
 
   const handleDisplayCall = (event) => {
@@ -242,32 +307,79 @@ export default function App() {
         <Text style={styles.header}>Gaurav's Call Management System</Text>
         <Text style={styles.subtitle}>Advanced Call Management System</Text>
 
-        <View style={styles.card}>
-          <TouchableOpacity 
-            style={styles.button} 
-            onPress={() => triggerCall(0)}
-            hitSlop={hitSlop}
-          >
-            <Text style={styles.buttonText}>Simulate Call Now</Text>
-          </TouchableOpacity>
+        {!activeCallUUID ? (
+          <View style={styles.card}>
+            <TouchableOpacity 
+              style={styles.button} 
+              onPress={() => triggerCall(0)}
+              hitSlop={hitSlop}
+            >
+              <Text style={styles.buttonText}>Simulate Call Now</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.button, styles.buttonSuccess]} 
-            onPress={() => triggerCall(3000)}
-            hitSlop={hitSlop}
-          >
-            <Text style={styles.buttonText}>Schedule Call (3s Delay)</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonSuccess]} 
+              onPress={() => triggerCall(3000)}
+              hitSlop={hitSlop}
+            >
+              <Text style={styles.buttonText}>Schedule Call (3s Delay)</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            
+            <View style={styles.callControls}>
+              <TouchableOpacity 
+                style={[styles.controlButton, isMuted && styles.controlButtonActive]} 
+                onPress={() => {
+                  RNCallKeep.setMutedCall(activeCallUUID, !isMuted);
+                  setIsMuted(!isMuted);
+                  log(`Toggled Mute to ${!isMuted}`);
+                }}
+              >
+                <Text style={styles.controlButtonText}>{isMuted ? 'Unmute' : 'Mute'}</Text>
+              </TouchableOpacity>
 
-        {lastPayload && (
-          <View style={styles.payloadBox}>
-            <Text style={styles.payloadTitle}>Incoming Call Payload:</Text>
-            {Object.entries(lastPayload).map(([key, value]) => (
-              <Text key={key} style={styles.payloadText}>{key}: {String(value)}</Text>
-            ))}
+              <TouchableOpacity 
+                style={[styles.controlButton, isOnHold && styles.controlButtonActive]} 
+                onPress={() => {
+                  RNCallKeep.setOnHold(activeCallUUID, !isOnHold);
+                  setIsOnHold(!isOnHold);
+                  log(`Toggled Hold to ${!isOnHold}`);
+                }}
+              >
+                <Text style={styles.controlButtonText}>{isOnHold ? 'Resume' : 'Hold'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.controlButton, isSpeaker && styles.controlButtonActive]} 
+                onPress={() => {
+                  if (Platform.OS === 'android') {
+                    RNCallKeep.toggleAudioRouteSpeaker(activeCallUUID, !isSpeaker);
+                  }
+                  setIsSpeaker(!isSpeaker);
+                  log(`Toggled Speaker to ${!isSpeaker}`);
+                }}
+              >
+                <Text style={styles.controlButtonText}>{isSpeaker ? 'Phone' : 'Speaker'}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.controlButton} 
+                onPress={() => {
+                  RNCallKeep.sendDTMF(activeCallUUID, '1');
+                  log(`Sent DTMF tone: 1`);
+                }}
+              >
+                <Text style={styles.controlButtonText}>Dial "1"</Text>
+              </TouchableOpacity>
+
+                
+            </View>
           </View>
         )}
+
+     
 
         <View style={styles.logContainer}>
           <ScrollView>
