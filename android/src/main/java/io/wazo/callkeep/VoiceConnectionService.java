@@ -226,7 +226,9 @@ public class VoiceConnectionService extends ConnectionService {
         Log.d(TAG, "[VoiceConnectionService] deinitConnection:" + connectionId);
         VoiceConnectionService.hasOutgoingCall = false;
 
-        currentConnectionService.stopForegroundService();
+        if (currentConnectionService != null) {
+            currentConnectionService.stopForegroundService();
+        }
 
         if (currentConnections.containsKey(connectionId)) {
             currentConnections.remove(connectionId);
@@ -313,7 +315,7 @@ public class VoiceConnectionService extends ConnectionService {
         Bundle extras = request.getExtras();
         String callUUID = extras.getString(EXTRA_CALL_UUID);
 
-        if(callUUID == null || callUUID == ""){
+        if(callUUID == null || callUUID.isEmpty()){
           callUUID = UUID.randomUUID().toString();
         }
 

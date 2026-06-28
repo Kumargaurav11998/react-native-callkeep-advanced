@@ -180,7 +180,7 @@ Alternative on iOS you can perform setup in `AppDelegate.m`. Doing this allows c
       multiple popups to the user at different times.
     - `selfManaged`: boolean (optional)
       When set to true, call keep will configure itself to run as a self managed connection service. 
-      **New feature**: When `selfManaged` is set to `true`, this library will automatically provide a full-featured incoming call UI inspired by the popular `flutter_callkit_incoming` package. It will show a modern, full-screen incoming call view (when the phone is unlocked) or a persistent high-priority heads-up notification (when locked or in another app). It also seamlessly transitions to an "Ongoing Call" state after accepting the call.
+      **New feature**: When `selfManaged` is set to `true`, this library will automatically provide a full-featured incoming call UI. It will show a modern, full-screen incoming call view (when the phone is unlocked) or a persistent high-priority heads-up notification (when locked or in another app). It also seamlessly transitions to an "Ongoing Call" state after accepting the call.
       If `selfManaged` is `false`, the system uses the default Android Telecom UI (the native stock phone dialer). The native Telecom UI does not support customizations like `backgroundColor` or `avatarUrl`.
       - `displayCallReachabilityTimeout`: number in ms (optional)
         If provided, starts a timeout that checks if the application is reachable and ends the call if not (Default: null)

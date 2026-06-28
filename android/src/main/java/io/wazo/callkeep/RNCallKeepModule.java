@@ -926,6 +926,10 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
     @ReactMethod
     public void sendDTMF(String uuid, String key) {
         Log.d(TAG, "[RNCallKeepModule] sendDTMF, uuid: " + uuid + ", key: " + key);
+        if (key == null || key.isEmpty()) {
+            Log.w(TAG, "[RNCallKeepModule] sendDTMF ignored because key is null or empty");
+            return;
+        }
         Connection conn = VoiceConnectionService.getConnection(uuid);
         if (conn == null) {
             Log.w(TAG, "[RNCallKeepModule] sendDTMF ignored because no connection found, uuid: " + uuid);
@@ -1223,6 +1227,7 @@ public class RNCallKeepModule extends ReactContextBaseJavaModule implements Life
             intentFilter.addAction(ACTION_ON_SILENCE_INCOMING_CALL);
             intentFilter.addAction(ACTION_ON_CREATE_CONNECTION_FAILED);
             intentFilter.addAction(ACTION_DID_CHANGE_AUDIO_ROUTE);
+            intentFilter.addAction(ACTION_WAKE_APP);
 
             if (this.reactContext != null) {
                 LocalBroadcastManager.getInstance(this.reactContext).registerReceiver(voiceBroadcastReceiver, intentFilter);

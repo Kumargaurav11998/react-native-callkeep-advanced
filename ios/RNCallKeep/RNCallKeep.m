@@ -125,6 +125,7 @@ RCT_EXPORT_MODULE()
     _hasListeners = YES;
     if ([_delayedEvents count] > 0) {
         [self sendEventWithName:RNCallKeepDidLoadWithEvents body:_delayedEvents];
+        _delayedEvents = [NSMutableArray array];
     }
 }
 
@@ -654,6 +655,10 @@ RCT_EXPORT_METHOD(getAudioRoutes: (RCTPromiseResolveBlock)resolve
     AVAudioSession* myAudioSession = [AVAudioSession sharedInstance];
     AVAudioSessionRouteDescription *currentRoute = [myAudioSession currentRoute];
     NSArray *selectedOutputs = currentRoute.outputs;
+
+    if (selectedOutputs == nil || selectedOutputs.count == 0) {
+        return nil;
+    }
 
     AVAudioSessionPortDescription *selectedOutput = selectedOutputs[0];
 

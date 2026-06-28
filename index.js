@@ -375,7 +375,7 @@ class RNCallKeep {
         [
           {
             text: options.cancelButton,
-            onPress: reject,
+            onPress: () => resolve(false),
             style: 'cancel',
           },
           { text: options.okButton, onPress: () => resolve(true) },

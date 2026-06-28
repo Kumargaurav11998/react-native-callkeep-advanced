@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.7] - 2026-06-28
+
+### Fixed
+- **Android Crash Fixes**: Resolved NullPointerExceptions in `deinitConnection` and `sendDTMF`.
+- **Android Broadcast Fix**: Added missing `ACTION_WAKE_APP` filter for background wakeup.
+- **Android Value Comparison**: Fixed incorrect string reference comparison for `callUUID`.
+- **iOS Crash Fix**: Added bounds check to prevent `NSRangeException` in `getSelectedAudioRoute` when outputs are empty.
+- **iOS Memory Leak**: Cleared `_delayedEvents` array after sending to prevent duplicate events.
+- **JS Unhandled Rejection**: Fixed unhandled promise rejection in `_alert` cancel flow.
+- **TypeScript Types**: Fixed module declaration name and updated static methods to instance interface for `react-native-callkeep-advanced`.
+
 ## [0.0.5] - 2026-06-27
 
 ### Added
